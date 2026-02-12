@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CityFlow Semey — AI & Government Edition</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Tektur:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --navy-900: #10263e; --navy-700: #1e3d63; --accent: #ff8f32;
+            --paper: #ffffff; --ink: #1c2734; --muted: #5f6f82;
+            --ok: #1d9f7a; --bad: #c84545; --shadow: 0 16px 36px rgba(16, 38, 62, 0.12);
+            --radius-lg: 20px; --radius-md: 14px;
+        }
+
+        body {
+            margin: 0; font-family: "IBM Plex Sans", sans-serif; color: var(--ink);
+            background: linear-gradient(180deg, #f6f9fd 0%, #eaf1fa 100%);
+            min-height: 100vh;
+        }
+
+        .topbar { background: var(--navy-900); color: white; padding: 12px 20px; position: sticky; top: 0; z-index: 1000; }
+        .topbar-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; }
+        
+        .brand { display: flex; align-items: center; gap: 12px; }
+        .brand-mark { background: var(--accent); color: white; width: 42px; height: 42px; display: flex; 
+                      align-items: center; justify-content: center; border-radius: 10px; font-family: 'Tektur', sans-serif; font-weight: 700; }
+        
+        .container { max-width: 1200px; margin: 24px auto; padding: 0 20px; }
+        .panel { background: var(--paper); border-radius: var(--radius-lg); padding: 24px; box-shadow: var(--shadow); margin-bottom: 24px; }
+        
+        .hidden { display: none !important; }
+        .btn { padding: 10px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600; transition: 0.2s; display: inline-block; }
+        .btn-primary { background: var(--accent); color: white; }
+        .btn-ok { background: var(--ok); color: white; }
+        
+        .request-card { border: 1px solid #e3ebf5; border-radius: var(--radius-md); padding: 16px; margin-bottom: 12px; }
+        .badge-ai { background: #f0f7ff; color: #007bff; border: 1px solid #d0e3ff; padding: 4px 8px; border-radius: 8px; font-size: 12px; font-weight: 700; }
+        .badge-status { padding: 4px 8px; border-radius: 8px; font-size: 12px; font-weight: 700; }
+        
+        .preview-img { width: 100%; max-height: 200px; object-fit: cover; border-radius: 10px; margin-top: 10px; border: 1px solid #eee; }
+        
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #dbe6f3; border-radius: 10px; margin-top: 6px; margin-bottom: 16px; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="brand">
+                <div class="brand-mark">SF</div>
+                <div><strong style="display:block; font-size:18px;">CityFlow Semey</strong><small style="opacity:0.7">AI & Akimat Integrated</small></div>
+            </div>
+            <div style="display:flex; align-items:center; gap:15px;">
+                <span id="user-chip" class="hidden"></span>
+                <button id="btn-logout" class="btn btn-primary hidden" style="padding: 6px 12px; font-size: 12px;">Выйти</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="view-login" class="panel" style="max-width:400px; margin: 60px auto;">
+            <h2>Авторизация</h2>
+            <form id="login-form">
+                <input type="password" id="login-iin" placeholder="Введите ИИН" required>
+                <input type="text" id="login-name" placeholder="Ваше имя" required>
+                <button type="submit" class="btn btn-primary" style="width:100%">Войти</button>
+            </form>
+        </section>
+
+        <section id="view-citizen" class="role-view hidden">
+            <div class="panel">
+                <h3>Заявить о проблеме</h3>
+                <form id="citizen-form">
+                    <input type="text" id="req-address" placeholder="Адрес (например: ул. Абая 15)" required>
+                    <select id="req-category">
+                        <option value="Яма на дороге">Яма на дороге</option>
+                        <option value="Сломанный фонарь">Освещение</option>
+                        <option value="Мусор">Стихийная свалка</option>
+                    </select>
+                    <textarea id="req-description" placeholder="Краткое описание..."></textarea>
+                    <label style="font-size:13px; color:var(--muted)">Фото ущерба/проблемы:</label>
+                    <input type="file" id="req-photo" accept="image/*">
+                    <button type="submit" class="btn btn-primary">Отправить на анализ ИИ</button>
+                </form>
+            </div>
+            <div class="panel">
+                <h3>Статус моих заявок</h3>
+                <div id="citizen-list"></div>
+            </div>
+        </section>
+
+        <section id="view-admin" class="role-view hidden">
+            <div class="panel">
+                <h2>Панель проверки Акимата</h2>
+                <p>Здесь вы одобряете бюджет, рассчитанный нейросетью.</p>
+                <div id="admin-feed"></div>
+            </div>
+        </section>
+
+        <section id="view-worker" class="role-view hidden">
+            <div class="panel">
+                <h2>Биржа заказов (Одобрено Акиматом)</h2>
+                <div id="worker-feed"></div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        const App = {
+            state: {
+                user: null,
+                requests: JSON.parse(localStorage.getItem('city_db_ai')) || []
+            },
+
+            init: function() {
+                document.getElementById('login-form').onsubmit = (e) => { e.preventDefault(); this.login(); };
+                document.getElementById('btn-logout').onclick = () => { localStorage.removeItem('city_user'); location.reload(); };
+                document.getElementById('citizen-form').onsubmit = (e) => { e.preventDefault(); this.createRequest(); };
+                
+                const saved = localStorage.getItem('city_user');
+                if (saved) { this.state.user = JSON.parse(saved); this.enterRole(); }
+            },
+
+            login: function() {
+                const iin = document.getElementById('login-iin').value;
+                const name = document.getElementById('login-name').value;
+                let role = 'citizen';
+                
+                // Скрытые коды доступа
+                if (iin === '999999999999') role = 'admin';
+                if (iin === '222222222222') role = 'worker';
+
+                this.state.user = { iin, name, role };
+                localStorage.setItem('city_user', JSON.stringify(this.state.user));
+                this.enterRole();
+            },
+
+            enterRole: function() {
+                document.getElementById('view-login').classList.add('hidden');
+                document.querySelectorAll('.role-view').forEach(el => el.classList.add('hidden'));
+                document.getElementById('view-' + this.state.user.role).classList.remove('hidden');
+                document.getElementById('user-chip').textContent = this.state.user.name + ` (${this.state.user.role})`;
+                document.getElementById('user-chip').classList.remove('hidden');
+                document.getElementById('btn-logout').classList.remove('hidden');
+                this.render();
+            },
+
+            createRequest: function() {
+                const file = document.getElementById('req-photo').files[0];
+                const reader = new FileReader();
+
+                reader.onloadend = () => {
+                    // Имитация работы ИИ для анализа суммы
+                    const basePrice = { "Яма на дороге": 45000, "Сломанный фонарь": 12000, "Мусор": 25000 };
+                    const aiPrice = basePrice[document.getElementById('req-category').value] + Math.floor(Math.random() * 5000);
+
+                    const newReq = {
+                        id: Math.floor(Math.random() * 10000),
+                        iin: this.state.user.iin,
+                        author: this.state.user.name,
+                        address: document.getElementById('req-address').value,
+                        category: document.getElementById('req-category').value,
+                        price: aiPrice,
+                        photo: reader.result,
+                        status: 'checking', // Статус: на проверке акиматом
+                        date: new Date().toLocaleString()
+                    };
+
+                    this.state.requests.unshift(newReq);
+                    this.save();
+                    alert('ИИ проанализировал фото. Расчетная сумма: ' + aiPrice + ' тг. Отправлено на одобрение в Акимат.');
+                    document.getElementById('citizen-form').reset();
+                };
+                
+                if (file) reader.readAsDataURL(file);
+                else alert('Пожалуйста, прикрепите фото для работы ИИ');
+            },
+
+            approveByAkimat: function(id) {
+                const req = this.state.requests.find(r => r.id === id);
+                req.status = 'approved';
+                this.save();
+                alert('Заявка одобрена и выставлена на биржу для подрядчиков.');
+            },
+
+            takeOrder: function(id) {
+                const req = this.state.requests.find(r => r.id === id);
+                req.status = 'in_work';
+                req.worker = this.state.user.name;
+                this.save();
+                alert('Вы приняли заказ! Приступайте к выполнению.');
+            },
+
+            save: function() {
+                localStorage.setItem('city_db_ai', JSON.stringify(this.state.requests));
+                this.render();
+            },
+
+            render: function() {
+                const cList = document.getElementById('citizen-list');
+                const aFeed = document.getElementById('admin-feed');
+                const wFeed = document.getElementById('worker-feed');
+
+                const cardHtml = (r, type) => `
+                    <div class="request-card">
+                        <div style="display:flex; justify-content:space-between">
+                            <span class="badge-ai">🤖 AI Анализ: ${r.price} ₸</span>
+                            <span class="badge-status" style="background:${r.status === 'approved' ? '#e8f5f0' : '#fff4e5'}">
+                                ${r.status === 'checking' ? 'На проверке' : r.status === 'approved' ? 'Одобрено' : 'В работе'}
+                            </span>
+                        </div>
+                        <img src="${r.photo}" class="preview-img">
+                        <h4>${r.address}</h4>
+                        <p style="font-size:14px; color:var(--muted)">${r.category}</p>
+                        ${type === 'admin' && r.status === 'checking' ? `<button onclick="App.approveByAkimat(${r.id})" class="btn btn-ok" style="width:100%">Одобрить бюджет</button>` : ''}
+                        ${type === 'worker' && r.status === 'approved' ? `<button onclick="App.takeOrder(${r.id})" class="btn btn-primary" style="width:100%">Принять заказ за ${r.price} ₸</button>` : ''}
+                        ${r.status === 'in_work' ? `<p style="color:var(--ok); font-weight:700">Исполнитель: ${r.worker}</p>` : ''}
+                    </div>
+                `;
+
+                if (this.state.user.role === 'citizen') {
+                    cList.innerHTML = this.state.requests.filter(r => r.iin === this.state.user.iin).map(r => cardHtml(r, 'citizen')).join('');
+                }
+                if (this.state.user.role === 'admin') {
+                    aFeed.innerHTML = this.state.requests.map(r => cardHtml(r, 'admin')).join('');
+                }
+                if (this.state.user.role === 'worker') {
+                    wFeed.innerHTML = this.state.requests.filter(r => r.status === 'approved' || (r.status === 'in_work' && r.worker === this.state.user.name)).map(r => cardHtml(r, 'worker')).join('');
+                }
+            }
+        };
+
+        App.init();
+    </script>
+</body>
+</html>
